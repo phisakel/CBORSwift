@@ -28,9 +28,25 @@ extension Data {
         }
         return str
     }
+  
+  public var hex2: String {
+      var str = ""
+      for byte in self.bytes {
+          str = str.appendingFormat("%02X ", UInt(byte))
+      }
+      return str
+  }
     
     public var string: String {
-        return String.init(data:self, encoding: .utf8)!
+      // philip fix
+        var res = String.init(data:self, encoding: .utf8)
+      if res == nil {
+        res = String.init(data:self, encoding: .ascii)
+      }
+      if res == nil {
+             res = String.init(data:self, encoding: .unicode)
+      }
+      return res ?? "ErrorString"
     }
 }
 
@@ -69,18 +85,13 @@ extension String {
             bits.append(UInt8(chrInt))
         }
 
-        if bits.count % 8 == 0 {
+        let bitsSize = bits.count % 8
+        if bitsSize == 0 {
             return bits
         }
         
         var bitDiff = (bits.count / 8) + 1
-        if bitDiff > 8 {
-            bitDiff = 16
-        }
-        else if bitDiff > 4 {
-            bitDiff = 8
-        }
-        else if bitDiff > 2 {
+        if bitDiff > 2 {
             bitDiff = 4
         }
         
@@ -125,7 +136,7 @@ extension String {
     }
     
     public var ascii_bytes: [UInt8] {
-        return self.data(using: .ascii)!.bytes
+         return self.data(using: .ascii)!.bytes
     }
     
     public var hex_decimal: Int {
@@ -135,6 +146,17 @@ extension String {
     public var hex_binary: [UInt8] {
         return String(Int(self, radix: 16)!, radix: 2).bytes
     }
+  
+  static let SeqWeak1 = "01234567890123456789"
+  static let SeqWeak2 = "09876543210987654321"
+  public func isCodeWeak() -> Bool {
+    if Self.SeqWeak1.contains(self) || Self.SeqWeak2.contains(self) { return true}
+    let ch = Array(self)
+    for (i,c) in self.enumerated() {
+      if i < ch.count-1 && c != ch[i+1] { return false}
+    }
+    return true
+  }
 }
 
 extension NSString {
@@ -177,4 +199,10 @@ extension Dictionary where Value: Comparable, Key: Comparable {
             return $0.0 == $1.0
         }
     }
+  //https://stackoverflow.com/questions/26728477/how-to-combine-two-dictionary-instances-in-swift
+  mutating func merge(dict: [Key: Value]){
+      for (k, v) in dict {
+          updateValue(v, forKey: k)
+      }
+  }
 }

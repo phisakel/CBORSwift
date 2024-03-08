@@ -12,6 +12,10 @@ public class CBOR: NSObject {
     
     //MARK:- Encoder
     public class func encode(_ value: NSObject) -> [UInt8]? {
+        // philip important
+        if let binEnc = value as? BinaryDataEncodable {
+            return binEnc.getBinaryData().bytes
+        }
         return value.encode().data?.bytes
     }
 
@@ -20,6 +24,14 @@ public class CBOR: NSObject {
         let decoder = Decoder(value)
         return decoder.decode()
     }
+  
+  public class func unwrapAndDecode(_ value: [UInt8]) -> NSObject? {
+    let decoder1 = Decoder(value)
+    guard let tag = decoder1.decode() as? NSTag, let ns = tag.objectValue() as? NSByteString else { return nil }
+    let decoder2 = Decoder(ns.byteArray)
+    return decoder2.decode()
+  }
+
 }
 
 

@@ -36,7 +36,7 @@ class MajorTypes: NSObject {
     }
     
     public func get() -> Data {
-        return Data(bytes: prepareBits())
+        return Data(prepareBits())
     }
     
     public func identify(_ type: [UInt8]) -> MajorType? {

@@ -8,29 +8,132 @@
 
 import Foundation
 
+// philip additions
+
+public protocol BinaryDataEncodable {
+    func getBinaryData() -> Data
+}
+
 public class NSByteString: NSObject {
     private var value: String = ""
+    private var bytes: [UInt8]!
     
     public init(_ value: String) {
         super.init()
         self.value = value
     }
     
+    public init(bytes: [UInt8]) {
+        self.bytes = bytes
+    }
+    
     public func stringValue() -> String {
-        return self.value
+        if let ba = bytes, ba.count>0, value.count == 0 {
+            value = ba.data!.hex
+        }
+        return value
+    }
+  
+  override public var description: String { "0x: \(stringValue())" }
+    
+    public var byteArray: [UInt8] {
+        if let ba = bytes { return ba }
+        var res = [UInt8]()
+        for offset in stride(from: 0, to: self.value.count, by: 2) {
+            let byte = value[offset..<offset+2].hex_decimal
+            res.append(UInt8(byte))
+        }
+        return res
     }
     
     @objc internal override func encode() -> String {
-        var byteArray = [UInt8]()
-        for offset in stride(from: 0, to: self.value.count, by: 2) {
-            let byte = value[offset..<offset+2].hex_decimal
-            byteArray.append(UInt8(byte))
-        }
+
         let encodedArray = Encoder.prepareByteArray(major: .major2, measure: byteArray.count)
-        let headerData   = Data(bytes: encodedArray).binary_decimal.hex
-        let byteData     = Data(bytes: byteArray).hex
+        let headerData   = Data(encodedArray).binary_decimal.hex
+        let byteData     = Data(byteArray).hex
         
         return headerData.appending(byteData)
+    }
+}
+
+extension NSByteString: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeByteString(byteArray).data!
+    }
+}
+
+extension Array {
+      var data : Data?{
+          return (self is Array<UInt8>) ? Data(self as! Array<UInt8>) : nil
+      }
+      var byteString: String? {
+          return (self is Array<UInt8>) ? (self as! Array<UInt8>).map { String(format: "%02x", $0)}.joined() : nil
+      }
+  }
+
+extension Int: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        if (self < 0) {
+            return Encoder.encodeNegativeInt(Int64(self)).data!
+        } else {
+            return Encoder.encodeVarUInt(UInt64(self)).data!
+        }
+    }
+}
+
+extension UInt: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeVarUInt(UInt64(self)).data!
+    }
+}
+
+extension UInt8: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeUInt8(self).data!
+    }
+}
+
+
+extension UInt16: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeUInt16(self).data!
+    }
+}
+
+
+extension UInt64: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeUInt64(self).data!
+    }
+}
+
+extension UInt32: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeUInt32(self).data!
+    }
+}
+
+extension String: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeString(self).data!
+    }
+}
+
+extension Float: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeFloat(self).data!
+    }
+}
+
+extension Double: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeDouble(self).data!
+    }
+}
+
+extension Bool: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        return Encoder.encodeBool(self).data!
     }
 }
 
@@ -57,11 +160,11 @@ public class NSSimpleValue: NSObject {
         var encodedArray = Encoder.prepareByteArray(major: .major7, measure: 0)
         encodedArray = [UInt8](encodedArray[0..<3])
         
-        var byteArray = Data(bytes: [byte]).hex.hex_binary
+        var byteArray = Data([byte]).hex.hex_binary
         byteArray = [UInt8](byteArray[3..<byteArray.count])
         
         encodedArray.append(contentsOf: byteArray)
-        return Data(bytes: encodedArray).binary_decimal.hex
+        return Data(encodedArray).binary_decimal.hex
     }
     
     public class func decode(header: Int) -> NSNumber? {
@@ -75,6 +178,10 @@ public class NSSimpleValue: NSObject {
         }
         return nil
     }
+  
+  public override var description: String { "SimpleValue: " + (value == nil ? "nil" : String(value!)) }
+  public override var debugDescription: String { "SimpleValue: " + (value == nil ? "nil" : String(value!)) }
+
 }
 
 public class NSTag: NSObject {
@@ -89,14 +196,14 @@ public class NSTag: NSObject {
     }
     
     @objc internal override func encode() -> String {
-        if tag > 0 {
+      //  if tag > 0 {
             let encodedArray = Encoder.prepareByteArray(major: .major6, measure: self.tag)
-            let headerData   = Data(bytes: encodedArray).binary_decimal.hex
-            let encodedValue = Data(bytes: self.value.encode()!).hex
+            let headerData   = Data(encodedArray).binary_decimal.hex
+            let encodedValue = Data(self.value.encode()!).hex
             
             return headerData.appending(encodedValue)
-        }
-        return ""
+       // }
+       // return ""
     }
     
     public func tagValue() -> Int {
@@ -106,7 +213,22 @@ public class NSTag: NSObject {
     public func objectValue() -> NSObject {
         return self.value
     }
+  
+  public override var description: String { "\(self.tag ?? -1): \(self.value ?? NSString())" }
+  public override var debugDescription: String { "\(self.tag ?? -1): \(self.value ?? NSString())" }
+
 }
+
+
+extension NSTag: BinaryDataEncodable {
+    public func getBinaryData() -> Data {
+        var res = Encoder.encodeVarUInt(UInt64(tag!))
+        res[0] = res[0] | 0b110_00000
+        res.append(contentsOf: CBOR.encode(value)!)
+        return res.data!
+    }
+}
+
 
 
 
